@@ -240,11 +240,9 @@ COUNT's directionality."
          (catch 'abort
            (while (> i 0)
              (when evil-snipe-enable-incremental-highlight
-               (when (not (null keys))
-                 ;; (evil-snipe--cleanup)
-               )
-               ;; (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key keys))
-               )
+               (evil-snipe--cleanup)
+               (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key (reverse keys)) t)
+               (add-hook 'pre-command-hook #'evil-snipe--cleanup))
              (let* ((prompt (format "%d>%s" i (mapconcat #'char-to-string (reverse keys) "")))
                     (key (evil-read-key (if evil-snipe-show-prompt prompt))))
                (cond
@@ -269,9 +267,8 @@ COUNT's directionality."
                         (push key keys)
                         (cl-decf i)))
                  (when evil-snipe-enable-incremental-highlight
-                   (evil-snipe--cleanup)
-                   (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key (reverse keys)))
-                   (add-hook 'pre-command-hook #'evil-snipe--cleanup))))))
+                   (evil-snipe--cleanup))
+                 ))))
            keys)))))
 
 (defun evil-snipe--bounds (&optional forward-p count)
@@ -320,11 +317,12 @@ scope, determined from `evil-snipe-scope'. If abs(COUNT) > 1, use
                                      (first-p)))
     overlay))
 
-(defun evil-snipe--highlight-all (count forward-p data)
+(defun evil-snipe--highlight-all (count forward-p data &optional nexts)
   "Highlight all instances of KEYS ahead of the cursor at an interval of COUNT,
 or behind it if COUNT is negative."
   (let ((case-fold-search (evil-snipe--case-p data))
-        (match (mapconcat #'cdr data ""))
+        (match (cond (data (mapconcat #'cdr data ""))
+                     (".")))
         (bounds
          (let ((evil-snipe-scope
                 (pcase evil-snipe-scope
@@ -347,17 +345,20 @@ or behind it if COUNT is negative."
                    (skip-chars-forward " \t")
                    (backward-char (- hl-end hl-beg)))
                   (t
-                   (push (evil-snipe--highlight hl-beg hl-end)
-                         overlays)
-                   (let* ((next-char (char-after hl-end))
-                         (unique (not (member next-char seen))))
-                     (when unique
-                       (push (char-after hl-end) seen))
-                     (push (evil-snipe--highlight hl-end (1+ hl-end) (if unique
-                                                                         'evil-snipe-first-face
-                                                                       'evil-snipe-second-face))
-                           overlays)
-                     )))))))
+                   (when data
+                     (push (evil-snipe--highlight hl-beg hl-end)
+                           overlays))
+                   (when nexts
+                     (let* ((next-char (char-after hl-end))
+                            (times_seen (count next-char seen))
+                            (face (cond ((eq times_seen 0) 'evil-snipe-first-face)
+                                        ((eq times_seen 1) 'evil-snipe-second-face)
+                                        nil)))
+                       (when face
+                         (push (char-after hl-end) seen)
+                         (push (evil-snipe--highlight hl-end (1+ hl-end) face)
+                               overlays))
+                       ))))))))
     overlays))
 
 (defun evil-snipe--cleanup ()
