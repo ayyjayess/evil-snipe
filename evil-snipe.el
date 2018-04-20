@@ -182,6 +182,16 @@ Only works in Emacs 25.1+."
   "Face for other matches when sniping"
   :group 'evil-snipe)
 
+(defface evil-snipe-first-face
+  '((t (:inherit font-lock-constant-face :underline t)))
+  "Face for first unique character."
+  :group 'evil-snipe)
+
+(defface evil-snipe-second-face
+  '((t (:inherit font-lock-keyword-face :underline t)))
+  "Face for second unique character."
+  :group 'evil-snipe)
+
 ;; State vars
 (defvar evil-snipe--last nil)
 
@@ -229,7 +239,13 @@ COUNT's directionality."
         (reverse
          (catch 'abort
            (while (> i 0)
-             (let* ((prompt (format "%d>%s" i (mapconcat #'char-to-string keys "")))
+             (when evil-snipe-enable-incremental-highlight
+               (when (not (null keys))
+                 ;; (evil-snipe--cleanup)
+               )
+               ;; (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key keys))
+               )
+             (let* ((prompt (format "%d>%s" i (mapconcat #'char-to-string (reverse keys) "")))
                     (key (evil-read-key (if evil-snipe-show-prompt prompt))))
                (cond
                 ;; TAB adds more characters if `evil-snipe-tab-increment'
@@ -254,7 +270,7 @@ COUNT's directionality."
                         (cl-decf i)))
                  (when evil-snipe-enable-incremental-highlight
                    (evil-snipe--cleanup)
-                   (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key keys))
+                   (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key (reverse keys)))
                    (add-hook 'pre-command-hook #'evil-snipe--cleanup))))))
            keys)))))
 
@@ -299,9 +315,9 @@ scope, determined from `evil-snipe-scope'. If abs(COUNT) > 1, use
     (remove-overlays beg end 'category 'evil-snipe))
   (let ((overlay (make-overlay beg end nil nil nil)))
     (overlay-put overlay 'category 'evil-snipe)
-    (overlay-put overlay 'face (if first-p
-                                   'evil-snipe-first-match-face
-                                 'evil-snipe-matches-face))
+    (overlay-put overlay 'face (cond ((eq first-p t) 'evil-snipe-first-match-face)
+                                     ((eq first-p nil) 'evil-snipe-matches-face)
+                                     (first-p)))
     overlay))
 
 (defun evil-snipe--highlight-all (count forward-p data)
@@ -316,7 +332,8 @@ or behind it if COUNT is negative."
                   (`buffer 'visible)
                   (_ evil-snipe-scope))))
            (evil-snipe--bounds forward-p)))
-        overlays)
+        overlays
+        (seen '()))
     (save-excursion
       (goto-char (car bounds))
       (while (and (<= (point) (cdr bounds))
@@ -331,7 +348,16 @@ or behind it if COUNT is negative."
                    (backward-char (- hl-end hl-beg)))
                   (t
                    (push (evil-snipe--highlight hl-beg hl-end)
-                         overlays)))))))
+                         overlays)
+                   (let* ((next-char (char-after hl-end))
+                         (unique (not (member next-char seen))))
+                     (when unique
+                       (push (char-after hl-end) seen))
+                     (push (evil-snipe--highlight hl-end (1+ hl-end) (if unique
+                                                                         'evil-snipe-first-face
+                                                                       'evil-snipe-second-face))
+                           overlays)
+                     )))))))
     overlays))
 
 (defun evil-snipe--cleanup ()
