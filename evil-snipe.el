@@ -53,7 +53,10 @@ cursor."
   "If non-nil, each additional keypress will incrementally search and highlight
 matches. Otherwise, only highlight after you've finished skulking."
   :group 'evil-snipe
-  :type 'boolean)
+  :type '(choice
+          (const :tag "No incremental highlighting" nil)
+          (const :tag "Incremental highlighting" t)
+          (const :tag "Incremental plus jump highlighting" 'jump)))
 
 (defcustom evil-snipe-override-evil-repeat-keys t
   "If non-nil (while `evil-snipe-override-evil' is non-nil) evil-snipe will
@@ -239,7 +242,7 @@ COUNT's directionality."
         (reverse
          (catch 'abort
            (while (> i 0)
-             (when evil-snipe-enable-incremental-highlight
+             (when (eq evil-snipe-enable-incremental-highlight 'jump)
                (evil-snipe--cleanup)
                (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key (reverse keys)) t)
                (add-hook 'pre-command-hook #'evil-snipe--cleanup))
@@ -267,7 +270,10 @@ COUNT's directionality."
                         (push key keys)
                         (cl-decf i)))
                  (when evil-snipe-enable-incremental-highlight
-                   (evil-snipe--cleanup))
+                   (evil-snipe--cleanup)
+                   (when (eq evil-snipe-enable-incremental-highlight t)
+                     (evil-snipe--highlight-all count forward-p (mapcar #'evil-snipe--process-key (reverse keys)))
+                     (add-hook 'pre-command-hook #'evil-snipe--cleanup)))
                  ))))
            keys)))))
 
